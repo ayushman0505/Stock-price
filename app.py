@@ -15,14 +15,12 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 
-
-
 st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Ayushman Raghuvanshi](www.linkedin.com/in/ayushman-raghuvanshi)")
+st.sidebar.info("Created and designed by [Ayushman Raghuvanshi](https://www.linkedin.com/in/ayushman-raghuvanshi)")
 
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize','Recent Data', 'Predict'])
+    option = st.sidebar.selectbox('Make a choice', ['Visualize','Recent Data', 'Predict'], index=2)
     if option == 'Visualize':
         tech_indicators()
     elif option == 'Recent Data':
@@ -30,38 +28,36 @@ def main():
     else:
         predict()
 
-
-
-@st.cache_resource
+@st.cache_data
 def download_data(op, start_date, end_date):
     df = yf.download(op, start=start_date, end=end_date, progress=False)
     return df
 
-
-
 option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
 option = option.upper()
 today = datetime.date.today()
-duration = st.sidebar.number_input('Enter the duration', value=3000)
+duration = st.sidebar.number_input('Enter the duration', value=300)
 before = today - datetime.timedelta(days=duration)
 start_date = st.sidebar.date_input('Start Date', value=before)
 end_date = st.sidebar.date_input('End date', today)
 if st.sidebar.button('Send'):
     if start_date < end_date:
-        st.sidebar.success('Start date: `%s`\n\nEnd date: `%s`' %(start_date, end_date))
-        download_data(option, start_date, end_date)
+        st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
+        data = download_data(option, start_date, end_date)
     else:
         st.sidebar.error('Error: End date must fall after start date')
+else:
+    data = download_data(option, start_date, end_date)
 
-
-
-
-data = download_data(option, start_date, end_date)
 scaler = StandardScaler()
 
 def tech_indicators():
     st.header('Technical Indicators')
     option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
+
+    if data.empty or 'Close' not in data.columns or data['Close'].isnull().any():
+        st.error('Data is not available or contains missing values.')
+        return
 
     # Bollinger bands
     bb_indicator = BollingerBands(data.Close)
@@ -95,24 +91,21 @@ def tech_indicators():
         st.write('Simple Moving Average')
         st.line_chart(sma)
     else:
-        st.write('Expoenetial Moving Average')
+        st.write('Exponential Moving Average')
         st.line_chart(ema)
-
 
 def dataframe():
     st.header('Recent Data')
     st.dataframe(data.tail(10))
 
-
-
 def predict():
     model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
-    num = st.number_input('How many days forecast?', value=5)
+    num = st.number_input('How many days forecast?', value=20)
     num = int(num)
     if st.button('Predict'):
         if model == 'LinearRegression':
             engine = LinearRegression()
-            model_engine(engine, num)
+            model_engine(engine, num)   
         elif model == 'RandomForestRegressor':
             engine = RandomForestRegressor()
             model_engine(engine, num)
@@ -125,7 +118,6 @@ def predict():
         else:
             engine = XGBRegressor()
             model_engine(engine, num)
-
 
 def model_engine(model, num):
     # getting only the closing price
@@ -144,13 +136,12 @@ def model_engine(model, num):
     # selecting the required values for training
     y = y[:-num]
 
-    #spliting the data
+    # splitting the data
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=7)
     # training the model
     model.fit(x_train, y_train)
     preds = model.predict(x_test)
-    st.text(f'r2_score: {r2_score(y_test, preds)} \
-            \nMAE: {mean_absolute_error(y_test, preds)}')
+    st.text(f'r2_score: {r2_score(y_test, preds)}\nMAE: {mean_absolute_error(y_test, preds)}')
     # predicting stock price based on the number of days
     forecast_pred = model.predict(x_forecast)
     day = 1
@@ -158,6 +149,6 @@ def model_engine(model, num):
         st.text(f'Day {day}: {i}')
         day += 1
 
-
 if __name__ == '__main__':
     main()
+
