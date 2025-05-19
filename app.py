@@ -13,6 +13,7 @@ from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import ExtraTreesRegressor
+import requests
 
 st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
@@ -39,16 +40,34 @@ def download_data(op, start_date, end_date):
     return df
 
 def get_top_stocks(exchange):
+    # Dynamically fetch tickers for NSE/BSE
     if exchange == 'NSE':
-        symbols = ['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'HINDUNILVR.NS']
+        url = "https://raw.githubusercontent.com/rahulbajaj0509/NSE-Stock-List/main/ind_nifty50list.csv"
+        df_tickers = pd.read_csv(url)
+        symbols = [f"{sym}.NS" for sym in df_tickers['Symbol'].tolist()]
     else:
-        symbols = ['RELIANCE.BO', 'TCS.BO', 'HDFCBANK.BO', 'INFY.BO', 'HINDUNILVR.BO']
-    data = yf.download(symbols, period='1d', progress=False)
-    close_prices = data['Close'].iloc[-1]
-    top_stocks = close_prices.sort_values(ascending=False).head(5)
-    top_stocks_df = pd.DataFrame(top_stocks).reset_index()
-    top_stocks_df.columns = ['Stock', 'Close Price']
-    top_stocks_df['Link'] = top_stocks_df['Stock'].apply(lambda x: f"https://www.nseindia.com/get-quotes/equity?symbol={x.split('.')[0]}" if exchange == 'NSE' else f"https://www.bseindia.com/stock-share-price/{x.split('.')[0]}")
+        url = "https://raw.githubusercontent.com/datasets/bse-stocks/master/data/bse-listed.csv"
+        df_tickers = pd.read_csv(url)
+        symbols = [f"{sym}.BO" for sym in df_tickers['Security Id'].head(50).tolist()]  # limit for demo
+
+    # Limit to 50 for performance (increase as needed)
+    symbols = symbols[:50]
+    data = yf.download(symbols, period='5d', group_by='ticker', progress=False, threads=True)
+    perf = []
+    for sym in symbols:
+        try:
+            close = data[sym]['Close']
+            pct = (close[-1] - close[0]) / close[0]
+            perf.append((sym, close[-1], pct))
+        except Exception:
+            continue
+    # Sort by performance
+    top_stocks = sorted(perf, key=lambda x: x[2], reverse=True)[:5]
+    top_stocks_df = pd.DataFrame(top_stocks, columns=['Stock', 'Close Price', 'Performance'])
+    top_stocks_df['Link'] = top_stocks_df['Stock'].apply(
+        lambda x: f"https://www.nseindia.com/get-quotes/equity?symbol={x.split('.')[0]}" if exchange == 'NSE'
+        else f"https://www.bseindia.com/stock-share-price/{x.split('.')[0]}"
+    )
     return top_stocks_df
 
 today = datetime.date.today()
@@ -80,10 +99,9 @@ def tech_indicators(stock_symbol):
 
     # Bollinger bands
     bb_indicator = BollingerBands(data.Close)
-    bb = data
+    bb = data.copy()
     bb['bb_h'] = bb_indicator.bollinger_hband()
     bb['bb_l'] = bb_indicator.bollinger_lband()
-    # Creating a new dataframe
     bb = bb[['Close', 'bb_h', 'bb_l']]
     # MACD
     macd = MACD(data.Close).macd()
@@ -206,6 +224,3 @@ def model_engine(model, num, data, scaler, savings, stock_symbol, exchange):
 
 if __name__ == '__main__':
     main()
-
-
-
