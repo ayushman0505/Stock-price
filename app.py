@@ -40,19 +40,26 @@ def download_data(op, start_date, end_date):
     return df
 
 def get_top_stocks(exchange):
-    # Dynamically fetch tickers for NSE/BSE
-    if exchange == 'NSE':
-        url = "https://raw.githubusercontent.com/rahulbajaj0509/NSE-Stock-List/main/ind_nifty50list.csv"
-        df_tickers = pd.read_csv(url)
-        symbols = [f"{sym}.NS" for sym in df_tickers['Symbol'].tolist()]
-    else:
-        url = "https://raw.githubusercontent.com/datasets/bse-stocks/master/data/bse-listed.csv"
-        df_tickers = pd.read_csv(url)
-        symbols = [f"{sym}.BO" for sym in df_tickers['Security Id'].head(50).tolist()]  # limit for demo
+    try:
+        if exchange == 'NSE':
+            url = "https://raw.githubusercontent.com/rahulbajaj0509/NSE-Stock-List/main/ind_nifty50list.csv"
+            df_tickers = pd.read_csv(url)
+            symbols = [f"{sym}.NS" for sym in df_tickers['Symbol'].tolist()]
+        else:
+            url = "https://raw.githubusercontent.com/datasets/bse-stocks/master/data/bse-listed.csv"
+            df_tickers = pd.read_csv(url)
+            symbols = [f"{sym}.BO" for sym in df_tickers['Security Id'].head(50).tolist()]
+    except Exception as e:
+        st.error(f"Could not fetch stock list from the internet. Error: {e}")
+        return pd.DataFrame(columns=['Stock', 'Close Price', 'Performance', 'Link'])
 
-    # Limit to 50 for performance (increase as needed)
     symbols = symbols[:50]
-    data = yf.download(symbols, period='5d', group_by='ticker', progress=False, threads=True)
+    try:
+        data = yf.download(symbols, period='5d', group_by='ticker', progress=False, threads=True)
+    except Exception as e:
+        st.error(f"Could not fetch stock prices. Error: {e}")
+        return pd.DataFrame(columns=['Stock', 'Close Price', 'Performance', 'Link'])
+
     perf = []
     for sym in symbols:
         try:
@@ -61,7 +68,6 @@ def get_top_stocks(exchange):
             perf.append((sym, close[-1], pct))
         except Exception:
             continue
-    # Sort by performance
     top_stocks = sorted(perf, key=lambda x: x[2], reverse=True)[:5]
     top_stocks_df = pd.DataFrame(top_stocks, columns=['Stock', 'Close Price', 'Performance'])
     top_stocks_df['Link'] = top_stocks_df['Stock'].apply(
