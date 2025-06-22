@@ -180,4 +180,6 @@ def model_engine(model, num):
         st.text(f'Day {day}: {i}')
         day += 1
 
-if __name__ ==
+if __name__ =='__main__':
+    main()
+
