@@ -13,95 +13,87 @@ from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import ExtraTreesRegressor
-import requests
+from sklearn.metrics import r2_score, mean_absolute_error
 
 st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Ayushman Raghuvanshi](www.linkedin.com/in/ayushman-raghuvanshi)")
+st.sidebar.markdown(
+    "Created and designed by <a href='https://www.linkedin.com/in/ayushman-raghuvanshi' target='_blank'>Ayushman Raghuvanshi</a>",
+    unsafe_allow_html=True
+)
+
+def show_top_5_stocks():
+    st.sidebar.header("Top 5 Performing Stocks (Last 30 Days)")
+    # Example Indian tickers (NSE/BSE) - replace with your preferred tickers
+    tickers = ['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS', 
+               'SBIN.NS', 'BHARTIARTL.NS', 'HINDUNILVR.NS', 'ITC.NS', 'LT.NS']
+    nse_map = {
+        'RELIANCE.NS': 'RELIANCE', 'TCS.NS': 'TCS', 'HDFCBANK.NS': 'HDFCBANK', 'INFY.NS': 'INFY', 'ICICIBANK.NS': 'ICICIBANK',
+        'SBIN.NS': 'SBIN', 'BHARTIARTL.NS': 'BHARTIARTL', 'HINDUNILVR.NS': 'HINDUNILVR', 'ITC.NS': 'ITC', 'LT.NS': 'LT'
+    }
+    bse_map = {
+        'RELIANCE.NS': '500325', 'TCS.NS': '532540', 'HDFCBANK.NS': '500180', 'INFY.NS': '500209', 'ICICIBANK.NS': '532174',
+        'SBIN.NS': '500112', 'BHARTIARTL.NS': '532454', 'HINDUNILVR.NS': '500696', 'ITC.NS': '500875', 'LT.NS': '500510'
+    }
+    end = datetime.date.today()
+    start = end - datetime.timedelta(days=30)
+    try:
+        data = yf.download(tickers, start=start, end=end)['Adj Close']
+        returns = (data.iloc[-1] - data.iloc[0]) / data.iloc[0]
+        top5 = returns.sort_values(ascending=False).head(5)
+        for ticker, ret in top5.items():
+            nse_url = f"https://www.nseindia.com/get-quotes/equity?symbol={nse_map[ticker]}"
+            bse_url = f"https://www.bseindia.com/stock-share-price/stockreach_stockdetails.aspx?scripcode={bse_map[ticker]}"
+            st.sidebar.markdown(
+                f"<b>{nse_map[ticker]}</b>: {ret:.2%} &nbsp; "
+                f"<a href='{nse_url}' target='_blank'>NSE</a> | "
+                f"<a href='{bse_url}' target='_blank'>BSE</a>",
+                unsafe_allow_html=True
+            )
+    except Exception as e:
+        st.sidebar.write("Could not fetch top stocks.")
+
+show_top_5_stocks()
 
 def main():
-    exchange = st.sidebar.selectbox('Select Exchange', ['NSE', 'BSE'], key='exchange_selectbox')
-    stock_symbol = st.sidebar.text_input('Enter a Stock Symbol', value='TATAMOTORS', key='stock_symbol_input')
-    stock_symbol = stock_symbol.upper()
-    if exchange == 'NSE':
-        stock_symbol += '.NS'
-    elif exchange == 'BSE':
-        stock_symbol += '.BO'
-    savings = st.sidebar.number_input('Enter your monthly savings', value=1000, key='savings_input')
-    st.sidebar.header('Top 5 Performing Stocks')
-    top_stocks = get_top_stocks(exchange)
-    for index, row in top_stocks.iterrows():
-        st.sidebar.markdown(f"[{row['Stock']}]({row['Link']}) - {row['Close Price']}")
-    predict(stock_symbol, savings, exchange)
+    option = st.sidebar.selectbox('Make a choice', ['Visualize','Recent Data', 'Predict'], index=2)
+    if option == 'Visualize':
+        tech_indicators()
+    elif option == 'Recent Data':
+        dataframe()
+    else:
+        predict()
 
-@st.cache_resource
+@st.cache_data
 def download_data(op, start_date, end_date):
     df = yf.download(op, start=start_date, end=end_date, progress=False)
     return df
 
-def get_top_stocks(exchange):
-    try:
-        if exchange == 'NSE':
-            url = "https://raw.githubusercontent.com/rahulbajaj0509/NSE-Stock-List/main/ind_nifty50list.csv"
-            df_tickers = pd.read_csv(url)
-            symbols = [f"{sym}.NS" for sym in df_tickers['Symbol'].tolist()]
-        else:
-            url = "https://raw.githubusercontent.com/datasets/bse-stocks/master/data/bse-listed.csv"
-            df_tickers = pd.read_csv(url)
-            symbols = [f"{sym}.BO" for sym in df_tickers['Security Id'].head(50).tolist()]
-    except Exception as e:
-        st.error(f"Could not fetch stock list from the internet. Error: {e}")
-        return pd.DataFrame(columns=['Stock', 'Close Price', 'Performance', 'Link'])
-
-    symbols = symbols[:50]
-    try:
-        data = yf.download(symbols, period='5d', group_by='ticker', progress=False, threads=True)
-    except Exception as e:
-        st.error(f"Could not fetch stock prices. Error: {e}")
-        return pd.DataFrame(columns=['Stock', 'Close Price', 'Performance', 'Link'])
-
-    perf = []
-    for sym in symbols:
-        try:
-            close = data[sym]['Close']
-            pct = (close[-1] - close[0]) / close[0]
-            perf.append((sym, close[-1], pct))
-        except Exception:
-            continue
-    top_stocks = sorted(perf, key=lambda x: x[2], reverse=True)[:5]
-    top_stocks_df = pd.DataFrame(top_stocks, columns=['Stock', 'Close Price', 'Performance'])
-    top_stocks_df['Link'] = top_stocks_df['Stock'].apply(
-        lambda x: f"https://www.nseindia.com/get-quotes/equity?symbol={x.split('.')[0]}" if exchange == 'NSE'
-        else f"https://www.bseindia.com/stock-share-price/{x.split('.')[0]}"
-    )
-    return top_stocks_df
-
+option = st.sidebar.text_input('Enter a Stock Symbol', value='RELIANCE.NS')
+option = option.upper()
 today = datetime.date.today()
-duration = st.sidebar.number_input('Enter the duration', value=3000, key='duration_input')
+duration = st.sidebar.number_input('Enter the duration', value=300)
 before = today - datetime.timedelta(days=duration)
-start_date = st.sidebar.date_input('Start Date', value=before, key='start_date_input')
-end_date = st.sidebar.date_input('End date', today, key='end_date_input')
-if st.sidebar.button('Send', key='send_button'):
+start_date = st.sidebar.date_input('Start Date', value=before)
+end_date = st.sidebar.date_input('End date', today)
+if st.sidebar.button('Send'):
     if start_date < end_date:
-        st.sidebar.success('Start date: `%s`\n\nEnd date: `%s`' %(start_date, end_date))
-        stock_symbol = st.sidebar.text_input('Enter a Stock Symbol', value='TATAMOTORS', key='stock_symbol_input_send')
-        stock_symbol = stock_symbol.upper()
-        exchange = st.sidebar.selectbox('Select Exchange', ['NSE', 'BSE'], key='exchange_selectbox_send')
-        if exchange == 'NSE':
-            stock_symbol += '.NS'
-        elif exchange == 'BSE':
-            stock_symbol += '.BO'
-        download_data(stock_symbol, start_date, end_date)
+        st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
+        data = download_data(option, start_date, end_date)
     else:
         st.sidebar.error('Error: End date must fall after start date')
+else:
+    data = download_data(option, start_date, end_date)
 
-def tech_indicators(stock_symbol):
-    data = download_data(stock_symbol, start_date, end_date)
-    if data.empty:
-        st.error("No data available for the given stock symbol and date range.")
-        return
+scaler = StandardScaler()
+
+def tech_indicators():
     st.header('Technical Indicators')
-    option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'], key='tech_indicators_radio')
+    option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
+
+    if data.empty or 'Close' not in data.columns or data['Close'].isnull().any():
+        st.error('Data is not available or contains missing values.')
+        return
 
     # Bollinger bands
     bb_indicator = BollingerBands(data.Close)
@@ -137,50 +129,36 @@ def tech_indicators(stock_symbol):
         st.write('Exponential Moving Average')
         st.line_chart(ema)
 
-def dataframe(stock_symbol):
-    data = download_data(stock_symbol, start_date, end_date)
-    if data.empty:
-        st.error("No data available for the given stock symbol and date range.")
-        return
+def dataframe():
     st.header('Recent Data')
     st.dataframe(data.tail(10))
 
-def predict(stock_symbol, savings, exchange):
-    data = download_data(stock_symbol, start_date, end_date)
-    if data.empty:
-        st.error("No data available for the given stock symbol and date range.")
-        return
-    scaler = StandardScaler()
-    model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'], key='model_radio')
-    num = st.number_input('How many days forecast?', value=5, key='num_days_input')
+def predict():
+    model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+    num = st.number_input('How many days forecast?', value=20)
     num = int(num)
-    if st.button('Predict', key='predict_button'):
+    if st.button('Predict'):
         if model == 'LinearRegression':
             engine = LinearRegression()
-            model_engine(engine, num, data, scaler, savings, stock_symbol, exchange)
+            model_engine(engine, num)   
         elif model == 'RandomForestRegressor':
             engine = RandomForestRegressor()
-            model_engine(engine, num, data, scaler, savings, stock_symbol, exchange)
+            model_engine(engine, num)
         elif model == 'ExtraTreesRegressor':
             engine = ExtraTreesRegressor()
-            model_engine(engine, num, data, scaler, savings, stock_symbol, exchange)
+            model_engine(engine, num)
         elif model == 'KNeighborsRegressor':
             engine = KNeighborsRegressor()
-            model_engine(engine, num, data, scaler, savings, stock_symbol, exchange)
+            model_engine(engine, num)
         else:
             engine = XGBRegressor()
-            model_engine(engine, num, data, scaler, savings, stock_symbol, exchange)
+            model_engine(engine, num)
 
-def model_engine(model, num, data, scaler, savings, stock_symbol, exchange):
+def model_engine(model, num):
     # getting only the closing price
-    df = data[['Close']]
+    df = data[['Close']].copy()
     # shifting the closing price based on number of days forecast
     df['preds'] = data.Close.shift(-num)
-    # dropping rows with NaN values
-    df.dropna(inplace=True)
-    if df.empty:
-        st.error("Not enough data to make predictions.")
-        return
     # scaling the data
     x = df.drop(['preds'], axis=1).values
     x = scaler.fit_transform(x)
@@ -197,36 +175,14 @@ def model_engine(model, num, data, scaler, savings, stock_symbol, exchange):
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=7)
     # training the model
     model.fit(x_train, y_train)
+    preds = model.predict(x_test)
+    st.text(f'r2_score: {r2_score(y_test, preds)}\nMAE: {mean_absolute_error(y_test, preds)}')
     # predicting stock price based on the number of days
     forecast_pred = model.predict(x_forecast)
-    forecast_dates = pd.date_range(start=today, periods=num).tolist()
-    forecast_prices = []
+    day = 1
     for i in forecast_pred:
-        forecast_prices.append(i)
-
-    # Plotting the predictions
-    st.header('Predicted Stock Prices')
-    forecast_df = pd.DataFrame({'Date': forecast_dates, 'Predicted Price': forecast_prices})
-    st.line_chart(forecast_df.set_index('Date'))
-
-    # Displaying the predicted prices for each day
-    st.header('Predicted Prices for Each Day')
-    for date, price in zip(forecast_dates, forecast_prices):
-        st.text(f'{date.date()}: {price}')
-
-    # Calculating the number of stocks you can buy with your savings
-    st.header('Number of Stocks You Can Buy with Your Savings')
-    num_stocks = [savings / price for price in forecast_prices]
-    for date, stocks in zip(forecast_dates, num_stocks):
-        st.text(f'{date.date()}: {stocks} stocks')
-
-    # Adding the "Invest Now" button
-    st.header('Invest Now')
-    if exchange == 'NSE':
-        stock_page_url = f"https://www.nseindia.com/get-quotes/equity?symbol={stock_symbol.split('.')[0]}"
-    else:
-        stock_page_url = f"https://www.bseindia.com/stock-share-price/{stock_symbol.split('.')[0]}"
-    st.markdown(f"[Click here to invest in {stock_symbol.split('.')[0]}]({stock_page_url})", unsafe_allow_html=True)
+        st.text(f'Day {day}: {i}')
+        day += 1
 
 if __name__ == '__main__':
     main()
