@@ -24,17 +24,12 @@ st.sidebar.markdown(
 
 def show_top_5_stocks():
     st.sidebar.header("Top 5 Performing Stocks (Last 30 Days)")
-    # Example Indian tickers (NSE/BSE) - replace with your preferred tickers
-    tickers = ['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS', 
-               'SBIN.NS', 'BHARTIARTL.NS', 'HINDUNILVR.NS', 'ITC.NS', 'LT.NS']
+    tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'NFLX', 'JPM', 'V']
     nse_map = {
-        'RELIANCE.NS': 'RELIANCE', 'TCS.NS': 'TCS', 'HDFCBANK.NS': 'HDFCBANK', 'INFY.NS': 'INFY', 'ICICIBANK.NS': 'ICICIBANK',
-        'SBIN.NS': 'SBIN', 'BHARTIARTL.NS': 'BHARTIARTL', 'HINDUNILVR.NS': 'HINDUNILVR', 'ITC.NS': 'ITC', 'LT.NS': 'LT'
+        'AAPL': 'AAPL', 'MSFT': 'MSFT', 'GOOGL': 'GOOGL', 'AMZN': 'AMZN', 'META': 'FB',
+        'TSLA': 'TSLA', 'NVDA': 'NVDA', 'NFLX': 'NFLX', 'JPM': 'JPM', 'V': 'V'
     }
-    bse_map = {
-        'RELIANCE.NS': '500325', 'TCS.NS': '532540', 'HDFCBANK.NS': '500180', 'INFY.NS': '500209', 'ICICIBANK.NS': '532174',
-        'SBIN.NS': '500112', 'BHARTIARTL.NS': '532454', 'HINDUNILVR.NS': '500696', 'ITC.NS': '500875', 'LT.NS': '500510'
-    }
+    bse_map = nse_map
     end = datetime.date.today()
     start = end - datetime.timedelta(days=30)
     try:
@@ -45,7 +40,7 @@ def show_top_5_stocks():
             nse_url = f"https://www.nseindia.com/get-quotes/equity?symbol={nse_map[ticker]}"
             bse_url = f"https://www.bseindia.com/stock-share-price/stockreach_stockdetails.aspx?scripcode={bse_map[ticker]}"
             st.sidebar.markdown(
-                f"<b>{nse_map[ticker]}</b>: {ret:.2%} &nbsp; "
+                f"<b>{ticker}</b>: {ret:.2%} &nbsp; "
                 f"<a href='{nse_url}' target='_blank'>NSE</a> | "
                 f"<a href='{bse_url}' target='_blank'>BSE</a>",
                 unsafe_allow_html=True
@@ -69,7 +64,7 @@ def download_data(op, start_date, end_date):
     df = yf.download(op, start=start_date, end=end_date, progress=False)
     return df
 
-option = st.sidebar.text_input('Enter a Stock Symbol', value='RELIANCE.NS')
+option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
 option = option.upper()
 today = datetime.date.today()
 duration = st.sidebar.number_input('Enter the duration', value=300)
@@ -97,9 +92,10 @@ def tech_indicators():
 
     # Bollinger bands
     bb_indicator = BollingerBands(data.Close)
-    bb = data.copy()
+    bb = data
     bb['bb_h'] = bb_indicator.bollinger_hband()
     bb['bb_l'] = bb_indicator.bollinger_lband()
+    # Creating a new dataframe
     bb = bb[['Close', 'bb_h', 'bb_l']]
     # MACD
     macd = MACD(data.Close).macd()
@@ -156,7 +152,7 @@ def predict():
 
 def model_engine(model, num):
     # getting only the closing price
-    df = data[['Close']].copy()
+    df = data[['Close']]
     # shifting the closing price based on number of days forecast
     df['preds'] = data.Close.shift(-num)
     # scaling the data
@@ -184,5 +180,4 @@ def model_engine(model, num):
         st.text(f'Day {day}: {i}')
         day += 1
 
-if __name__ == '__main__':
-    main()
+if __name__ ==
