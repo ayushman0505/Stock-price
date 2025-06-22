@@ -22,49 +22,23 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-def show_top_5_stocks():
-    st.sidebar.header("Top 5 Performing Stocks (Last 30 Days)")
-    tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'NFLX', 'JPM', 'V']
-    nse_map = {
-        'AAPL': 'AAPL', 'MSFT': 'MSFT', 'GOOGL': 'GOOGL', 'AMZN': 'AMZN', 'META': 'FB',
-        'TSLA': 'TSLA', 'NVDA': 'NVDA', 'NFLX': 'NFLX', 'JPM': 'JPM', 'V': 'V'
-    }
-    bse_map = nse_map
-    end = datetime.date.today()
-    start = end - datetime.timedelta(days=30)
-    try:
-        data = yf.download(tickers, start=start, end=end)['Adj Close']
-        returns = (data.iloc[-1] - data.iloc[0]) / data.iloc[0]
-        top5 = returns.sort_values(ascending=False).head(5)
-        for ticker, ret in top5.items():
-            nse_url = f"https://www.nseindia.com/get-quotes/equity?symbol={nse_map[ticker]}"
-            bse_url = f"https://www.bseindia.com/stock-share-price/stockreach_stockdetails.aspx?scripcode={bse_map[ticker]}"
-            st.sidebar.markdown(
-                f"<b>{ticker}</b>: {ret:.2%} &nbsp; "
-                f"<a href='{nse_url}' target='_blank'>NSE</a> | "
-                f"<a href='{bse_url}' target='_blank'>BSE</a>",
-                unsafe_allow_html=True
-            )
-    except Exception as e:
-        st.sidebar.write("Could not fetch top stocks.")
+# Exchange selection
+exchange = st.sidebar.selectbox('Select Exchange', ['NSE', 'BSE'])
+default_symbol = 'TATAMOTORS.NS' if exchange == 'NSE' else 'TATAMOTORS.BO'
 
-show_top_5_stocks()
+# Indian stock options for user
+stock_options = {
+    'NSE': [
+        'TATAMOTORS.NS', 'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS',
+        'ICICIBANK.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'HINDUNILVR.NS', 'ITC.NS', 'LT.NS'
+    ],
+    'BSE': [
+        'TATAMOTORS.BO', 'RELIANCE.BO', 'TCS.BO', 'HDFCBANK.BO', 'INFY.BO',
+        'ICICIBANK.BO', 'SBIN.BO', 'BHARTIARTL.BO', 'HINDUNILVR.BO', 'ITC.BO', 'LT.BO'
+    ]
+}
 
-def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize','Recent Data', 'Predict'], index=2)
-    if option == 'Visualize':
-        tech_indicators()
-    elif option == 'Recent Data':
-        dataframe()
-    else:
-        predict()
-
-@st.cache_data
-def download_data(op, start_date, end_date):
-    df = yf.download(op, start=start_date, end=end_date, progress=False)
-    return df
-
-option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
+option = st.sidebar.selectbox('Enter a Stock Symbol', stock_options[exchange], index=0)
 option = option.upper()
 today = datetime.date.today()
 duration = st.sidebar.number_input('Enter the duration', value=300)
@@ -74,28 +48,27 @@ end_date = st.sidebar.date_input('End date', today)
 if st.sidebar.button('Send'):
     if start_date < end_date:
         st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
-        data = download_data(option, start_date, end_date)
+        data = yf.download(option, start=start_date, end=end_date, progress=False)
     else:
         st.sidebar.error('Error: End date must fall after start date')
+        data = yf.download(option, start=start_date, end=end_date, progress=False)
 else:
-    data = download_data(option, start_date, end_date)
+    data = yf.download(option, start=start_date, end=end_date, progress=False)
 
 scaler = StandardScaler()
 
 def tech_indicators():
     st.header('Technical Indicators')
-    option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
-
     if data.empty or 'Close' not in data.columns or data['Close'].isnull().any():
         st.error('Data is not available or contains missing values.')
         return
 
+    option_tech = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
     # Bollinger bands
     bb_indicator = BollingerBands(data.Close)
-    bb = data
+    bb = data.copy()
     bb['bb_h'] = bb_indicator.bollinger_hband()
     bb['bb_l'] = bb_indicator.bollinger_lband()
-    # Creating a new dataframe
     bb = bb[['Close', 'bb_h', 'bb_l']]
     # MACD
     macd = MACD(data.Close).macd()
@@ -106,19 +79,19 @@ def tech_indicators():
     # EMA
     ema = EMAIndicator(data.Close).ema_indicator()
 
-    if option == 'Close':
+    if option_tech == 'Close':
         st.write('Close Price')
         st.line_chart(data.Close)
-    elif option == 'BB':
+    elif option_tech == 'BB':
         st.write('BollingerBands')
         st.line_chart(bb)
-    elif option == 'MACD':
+    elif option_tech == 'MACD':
         st.write('Moving Average Convergence Divergence')
         st.line_chart(macd)
-    elif option == 'RSI':
+    elif option_tech == 'RSI':
         st.write('Relative Strength Indicator')
         st.line_chart(rsi)
-    elif option == 'SMA':
+    elif option_tech == 'SMA':
         st.write('Simple Moving Average')
         st.line_chart(sma)
     else:
@@ -130,56 +103,104 @@ def dataframe():
     st.dataframe(data.tail(10))
 
 def predict():
-    model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+    st.header('Stock Price Prediction')
+    models = {
+        'LinearRegression': LinearRegression(),
+        'RandomForestRegressor': RandomForestRegressor(),
+        'ExtraTreesRegressor': ExtraTreesRegressor(),
+        'KNeighborsRegressor': KNeighborsRegressor(),
+        'XGBoostRegressor': XGBRegressor()
+    }
     num = st.number_input('How many days forecast?', value=20)
     num = int(num)
+    scores = {}
     if st.button('Predict'):
-        if model == 'LinearRegression':
-            engine = LinearRegression()
-            model_engine(engine, num)   
-        elif model == 'RandomForestRegressor':
-            engine = RandomForestRegressor()
-            model_engine(engine, num)
-        elif model == 'ExtraTreesRegressor':
-            engine = ExtraTreesRegressor()
-            model_engine(engine, num)
-        elif model == 'KNeighborsRegressor':
-            engine = KNeighborsRegressor()
-            model_engine(engine, num)
-        else:
-            engine = XGBRegressor()
-            model_engine(engine, num)
+        for name, model in models.items():
+            score = model_engine(model, num, return_score=True)
+            scores[name] = score
+        # Find best and worst
+        best_model = max(scores, key=lambda k: scores[k][0] if scores[k][0] is not None else float('-inf'))
+        worst_model = min(scores, key=lambda k: scores[k][0] if scores[k][0] is not None else float('inf'))
+        for name, (r2, mae) in scores.items():
+            rec = ""
+            if name == best_model:
+                rec = " (Recommended)"
+            elif name == worst_model:
+                rec = " (Least Recommended)"
+            st.write(f"**{name}**: r2_score: {r2:.4f} | MAE: {mae:.4f}{rec}")
+        # Show forecast for best model
+        st.subheader(f"Forecast for {best_model}")
+        model_engine(models[best_model], num, show_forecast=True)
 
-def model_engine(model, num):
-    # getting only the closing price
-    df = data[['Close']]
-    # shifting the closing price based on number of days forecast
+def model_engine(model, num, return_score=False, show_forecast=False):
+    df = data[['Close']].copy()
     df['preds'] = data.Close.shift(-num)
-    # scaling the data
     x = df.drop(['preds'], axis=1).values
     x = scaler.fit_transform(x)
-    # storing the last num_days data
     x_forecast = x[-num:]
-    # selecting the required values for training
     x = x[:-num]
-    # getting the preds column
     y = df.preds.values
-    # selecting the required values for training
     y = y[:-num]
-
-    # splitting the data
+    if len(x) == 0 or len(y) == 0:
+        if return_score:
+            return (None, None)
+        return
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=7)
-    # training the model
     model.fit(x_train, y_train)
     preds = model.predict(x_test)
-    st.text(f'r2_score: {r2_score(y_test, preds)}\nMAE: {mean_absolute_error(y_test, preds)}')
-    # predicting stock price based on the number of days
-    forecast_pred = model.predict(x_forecast)
-    day = 1
-    for i in forecast_pred:
-        st.text(f'Day {day}: {i}')
-        day += 1
+    r2 = r2_score(y_test, preds)
+    mae = mean_absolute_error(y_test, preds)
+    if show_forecast:
+        forecast_pred = model.predict(x_forecast)
+        for day, val in enumerate(forecast_pred, 1):
+            st.text(f'Day {day}: {val}')
+    if return_score:
+        return (r2, mae)
 
-if __name__ =='__main__':
+def show_top_5_stocks():
+    st.sidebar.markdown("---")
+    st.sidebar.header("Top 5 Performing Stocks (Last 30 Days)")
+    tickers = stock_options[exchange]
+    nse_map = {
+        'TATAMOTORS.NS': 'TATAMOTORS', 'RELIANCE.NS': 'RELIANCE', 'TCS.NS': 'TCS', 'HDFCBANK.NS': 'HDFCBANK', 'INFY.NS': 'INFY',
+        'ICICIBANK.NS': 'ICICIBANK', 'SBIN.NS': 'SBIN', 'BHARTIARTL.NS': 'BHARTIARTL', 'HINDUNILVR.NS': 'HINDUNILVR', 'ITC.NS': 'ITC', 'LT.NS': 'LT'
+    }
+    bse_map = {
+        'TATAMOTORS.BO': '500570', 'RELIANCE.BO': '500325', 'TCS.BO': '532540', 'HDFCBANK.BO': '500180', 'INFY.BO': '500209',
+        'ICICIBANK.BO': '532174', 'SBIN.BO': '500112', 'BHARTIARTL.BO': '532454', 'HINDUNILVR.BO': '500696', 'ITC.BO': '500875', 'LT.BO': '500510'
+    }
+    end = datetime.date.today()
+    start = end - datetime.timedelta(days=30)
+    try:
+        data5 = yf.download(tickers, start=start, end=end)['Adj Close']
+        returns = (data5.iloc[-1] - data5.iloc[0]) / data5.iloc[0]
+        top5 = returns.sort_values(ascending=False).head(5)
+        for ticker, ret in top5.items():
+            if exchange == 'NSE':
+                nse_url = f"https://www.nseindia.com/get-quotes/equity?symbol={nse_map[ticker]}"
+                bse_url = "#"
+            else:
+                nse_url = "#"
+                bse_url = f"https://www.bseindia.com/stock-share-price/stockreach_stockdetails.aspx?scripcode={bse_map[ticker]}"
+            st.sidebar.markdown(
+                f"<b>{ticker}</b>: {ret:.2%} &nbsp; "
+                f"<a href='{nse_url}' target='_blank'>NSE</a> | "
+                f"<a href='{bse_url}' target='_blank'>BSE</a>",
+                unsafe_allow_html=True
+            )
+    except Exception as e:
+        st.sidebar.write("Could not fetch top stocks.")
+
+def main():
+    option_main = st.sidebar.selectbox('Make a choice', ['Recent Data', 'Predict', 'Visualize'], index=1)
+    if option_main == 'Visualize':
+        tech_indicators()
+    elif option_main == 'Recent Data':
+        dataframe()
+    else:
+        predict()
+
+show_top_5_stocks()
+
+if __name__ == '__main__':
     main()
-
