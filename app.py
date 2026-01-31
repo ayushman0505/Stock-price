@@ -136,7 +136,7 @@ def model_engine(model, num, return_score=False, show_forecast=False):
     df = data[['Close']].copy()
     df['preds'] = df['Close'].shift(-num)
 
-    # ✅ DROP NaNs created by shifting
+    #  DROP NaNs created by shifting
     df.dropna(inplace=True)
 
     if len(df) <= num:
@@ -148,7 +148,7 @@ def model_engine(model, num, return_score=False, show_forecast=False):
     X = df[['Close']].values
     y = df['preds'].values
 
-    # ✅ Local scaler (NOT global)
+    # Local scaler (NOT global)
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
@@ -178,7 +178,6 @@ def model_engine(model, num, return_score=False, show_forecast=False):
 
     if return_score:
         return (r2, mae)
-)
 
 def show_top_5_stocks():
     st.sidebar.markdown("---")
