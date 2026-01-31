@@ -121,13 +121,20 @@ def predict():
         # Find best and worst
         best_model = max(scores, key=lambda k: scores[k][0] if scores[k][0] is not None else float('-inf'))
         worst_model = min(scores, key=lambda k: scores[k][0] if scores[k][0] is not None else float('inf'))
-        for name, (r2, mae) in scores.items():
-            rec = ""
-            if name == best_model:
-                rec = " (Recommended)"
-            elif name == worst_model:
-                rec = " (Least Recommended)"
-            st.write(f"**{name}**: r2_score: {r2:.4f} | MAE: {mae:.4f}{rec}")
+        for name, score in scores.items():
+    r2, mae = score
+
+    if r2 is None or mae is None:
+        st.write(f"**{name}**: Not enough data to evaluate")
+        continue
+
+    rec = ""
+    if name == best_model:
+        rec = " (Recommended)"
+    elif name == worst_model:
+        rec = " (Least Recommended)"
+
+    st.write(f"**{name}**: r2_score: {r2:.4f} | MAE: {mae:.4f}{rec}")
         # Show forecast for best model
         st.subheader(f"Forecast for {best_model}")
         model_engine(models[best_model], num, show_forecast=True)
