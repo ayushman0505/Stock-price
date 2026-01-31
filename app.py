@@ -134,28 +134,51 @@ def predict():
 
 def model_engine(model, num, return_score=False, show_forecast=False):
     df = data[['Close']].copy()
-    df['preds'] = data.Close.shift(-num)
-    x = df.drop(['preds'], axis=1).values
-    x = scaler.fit_transform(x)
-    x_forecast = x[-num:]
-    x = x[:-num]
-    y = df.preds.values
+    df['preds'] = df['Close'].shift(-num)
+
+    # ✅ DROP NaNs created by shifting
+    df.dropna(inplace=True)
+
+    if len(df) <= num:
+        if return_score:
+            return (None, None)
+        st.error("Not enough data for the selected forecast period.")
+        return
+
+    X = df[['Close']].values
+    y = df['preds'].values
+
+    # ✅ Local scaler (NOT global)
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
+
+    X_forecast = X[-num:]
+    X = X[:-num]
     y = y[:-num]
-    if len(x) == 0 or len(y) == 0:
+
+    if len(X) == 0 or len(y) == 0:
         if return_score:
             return (None, None)
         return
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=7)
+
+    x_train, x_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=7
+    )
+
     model.fit(x_train, y_train)
     preds = model.predict(x_test)
+
     r2 = r2_score(y_test, preds)
     mae = mean_absolute_error(y_test, preds)
+
     if show_forecast:
-        forecast_pred = model.predict(x_forecast)
+        forecast_pred = model.predict(X_forecast)
         for day, val in enumerate(forecast_pred, 1):
-            st.text(f'Day {day}: {val}')
+            st.text(f'Day {day}: {val:.2f}')
+
     if return_score:
         return (r2, mae)
+)
 
 def show_top_5_stocks():
     st.sidebar.markdown("---")
